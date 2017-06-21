@@ -90,7 +90,7 @@ func move(motions []Motion, position Point, absoluteangle float64, length float6
 															|--------------------|
 															| __           __    |
 															| \ \          \ \   |
-                                                            |  \ \     x    \ \  |
+                                                                                                                        |  \ \     x    \ \  |
 															|   \_\    |     \_\ |
 															|          |         |
 															|          |         |
@@ -112,7 +112,7 @@ func move(motions []Motion, position Point, absoluteangle float64, length float6
 															|-------|
 															| __    |
 															| \ \   |
-                                                            |  \ \  |  -|
+                                                                                                                        |  \ \  |  -|
 															|   \_\ |   |
 															|       |   |
 															|       |   |
