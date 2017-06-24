@@ -18,16 +18,22 @@ type Point struct {
 func main() {
 
 	length := 20.0
-	// steering_noise := 0.0
-	// distance_noise := 0.0
 	motions := []Motion{Motion{0, 10}, Motion{math.Pi / 6, 10}, Motion{0, 20}}
 
-	move(motions, Point{0, 0}, 0, length)
+	position := Point{0.0, 0.0}
+	orientation := 0.0
+	for _, motion := range motions {
+		position, orientation = bicycleMove(motion, position, orientation, length)
+		log.Println(position, orientation)
+	}
 }
 
-func move(motions []Motion, position Point, absoluteangle float64, length float64) {
+func bicycleMove(motion Motion, position Point, absoluteangle float64, lengthBetweenAxles float64) (Point, float64) {
 
 	// See https://www.youtube.com/watch?v=5lWj1FMkq5I
+
+	// Implements a bicycle model drivetrain (2 wheels, or 4 wheels, left and right approximated parallel)
+	// Does not implement any physics (movement is not constrained to the laws of physics)
 
 	// Given:
 	// x & y       : Position point of center of the rear axle
@@ -45,116 +51,32 @@ func move(motions []Motion, position Point, absoluteangle float64, length float6
 
 	x := position.X
 	y := position.Y
-	L := length
+	L := lengthBetweenAxles
 	theta := absoluteangle
 
-	xprime := x
-	yprime := y
-	thetaprime := absoluteangle
+	var xprime float64
+	var yprime float64
+	var thetaprime float64
 
-	for _, motion := range motions {
+	d := motion.Distance
+	alpha := motion.Angle
 
-		d := motion.Distance
-		alpha := motion.Angle
+	beta := (d / L) * math.Tan(alpha)
 
-		beta := (d / L) * math.Tan(alpha)
+	if beta < 0.001 {
+		// linear movement approximation
+		xprime = x + d*math.Cos(theta)
+		yprime = y + d*math.Sin(theta)
+		thetaprime = math.Mod(theta+beta, 2*math.Pi)
+	} else {
+		R := d / beta
 
-		if beta < 0.001 {
-			// linear movement approximation
-			xprime = x + d*math.Cos(theta)
-			yprime = y + d*math.Sin(theta)
-			thetaprime = math.Mod(theta+beta, 2*math.Pi)
-		} else {
-			R := d / beta
-
-			Cx := x - math.Sin(theta)*R
-			Cy := y + math.Cos(theta)*R
-			xprime = Cx + math.Sin(theta+beta)*R
-			yprime = Cy - math.Cos(theta+beta)*R
-			thetaprime = math.Mod(theta+beta, 2*math.Pi)
-		}
-
-		x = xprime
-		y = yprime
-		theta = thetaprime
-
-		log.Println(x, y, theta)
+		Cx := x - math.Sin(theta)*R
+		Cy := y + math.Cos(theta)*R
+		xprime = Cx + math.Sin(theta+beta)*R
+		yprime = Cy - math.Cos(theta+beta)*R
+		thetaprime = math.Mod(theta+beta, 2*math.Pi)
 	}
+
+	return Point{xprime, yprime}, thetaprime
 }
-
-/*
-	Car model: 1 box, 4 wheels, 2 directional in the front, 2 fixed in the rear
-
-	https://user-images.githubusercontent.com/4974818/27407504-d3114bda-56d8-11e7-811b-713aee5f4412.png
-
-															|--------------------|
-															| __           __    |
-															| \ \          \ \   |
-                                                                                                                        |  \ \     x    \ \  |
-															|   \_\    |     \_\ |
-															|          |         |
-															|          |         |
-															|          |         |
-															|          |L        |
-															|          |         |
-															|   _      |     _   |
-															|  | |     |    | |  |
-															|  | |     X    | |  |
-															|  |_|          |_|  |
-															|                    |
-															|--------------------|
-
-	Simplified by approximation : consider that the left and right directional wheels are parallel when turning (they are not in real life; see "ackerman drive")
-	This simplification is the bycicle model.
-
-	https://user-images.githubusercontent.com/4974818/27407537-f78ee828-56d8-11e7-8210-84575f5f3034.png
-
-															|-------|
-															| __    |
-															| \ \   |
-                                                                                                                        |  \ \  |  -|
-															|   \_\ |   |
-															|       |   |
-															|       |   |
-															|       |   |
-															|       |   | length L
-															|       |   |
-															|   _   |   |
-															|  | |  |   |
-															|  |x|  |  -|
-															|  |_|  |
-															|       |
-															|-------|
-
-    Given:
-    x & y       : Position point of center of the rear axle
-	L			: Length between front wheel and rear wheel axles
-    d           : Distance of movement of the vehicle
-    α (alpha)   : Angle of front wheel **relative** to center line of the vehicle
-    θ (theta)   : Angle of center line of the vehicle, **absolute**
-
-    We find:
-    β (beta)	: Turning angle
-    R           : Radius of turning circle
-    Cx & Cy     : Center point of turning circle
-    x' & y'     : New position point of center of the rear axle
-    θ'          : New angle of center line of the vehicle, **absolute**
-
-    β = (d / L) * tan(α)
-    R = d / β
-
-    If β < 0.001 : linear movement approximation
-
-        x' = x + d * cos(θ)
-        y' = y + d * sin(θ)
-        θ' = (θ + β) mod 2π
-
-    Else :
-
-        Cx = x - sin(θ) * R
-        Cy = y + cos(θ) * R
-        x' = Cx + sin(θ + β) * R
-        y' = Cy - cos(θ + β) * R
-        θ' = (θ + β) mod 2π
-
-*/
