@@ -13,7 +13,7 @@ type Watt = float64            // 1.0 = 1 watt
 type Angle = float64           // 1.0 = 1 rad
 type SquareMetre = float64     // 1.0 = 1m2
 
-type Vector = vector.Vector3
+type Vector = vector.Vector2
 type Force = Vector
 type Point = Vector
 
