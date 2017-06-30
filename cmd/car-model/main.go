@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"text/tabwriter"
 	"time"
-
-	"log"
 
 	"github.com/bytearena/bytearena/common/utils/number"
 	"github.com/bytearena/bytearena/common/utils/vector"
@@ -80,7 +79,7 @@ func main() {
 	secondPerFrame := 1.0 / fps
 
 	for frame := 0; frame < 10000; frame++ {
-		log.Println("ELAPSED TIME", float64(frame)*secondPerFrame, "s")
+		fmt.Println("ELAPSED TIME", number.ToFixed(float64(frame)*secondPerFrame, 2), "s")
 		compute(vehicle, secondPerFrame)
 		if vehicle.State.Physics.RPM > vehicle.Specs.MaxRPM-500 {
 			nextGear := vehicle.State.Controls.Gear
@@ -118,51 +117,15 @@ func compute(vehicle *types.Vehicle, dt float64) {
 	currentGearRatio := vehicle.Specs.Gears[vehicle.State.Controls.Gear].Ratio
 	transmissionRatio := currentGearRatio * vehicle.Specs.FinalDriveRatio
 
-	// Force = m * a
-	//  => a = Force / m
-	//  => m = Force / a
-
-	// F = symbol for weight, measured in Newtons, N.
-	// m = symbol for mass, measured in kilograms, or kg.
-	// a = symbol for acceleration, expressed as m/s2, or meters per second squared
-
-	brakingAcceleration := unit.Acceleration(number.Map(vehicle.State.Controls.Brake, 0, 1, 0, vehicle.Specs.MaxBrakingAcceleration)) // in m/s2
 	engineRPM := vehicle.State.Physics.RPM
 
-	engineTorque, _, _ := vehicle.Specs.TorqueFunc(engineRPM)                                                          // in N•m
-	engineBrakingTorque := vehicle.Specs.EngineBrakingRatio * (engineRPM / 60) * (1 - vehicle.State.Controls.Throttle) // in N•m
-
-	netEngineTorque := engineTorque // in N•m
-	var wheelsTorque unit.Torque
-	if math.IsInf(transmissionRatio, +1) { // happens when in neutral gear
-		wheelsTorque = 0 // in N•m
-	} else {
-		wheelsTorque = netEngineTorque * transmissionRatio // in N•m
-	}
-
-	wheelsForce := wheelsTorque / vehicle.Specs.WheelRadius                                // in Newtons
-	gravityDownwardsForce := vehicle.Specs.Mass * g * math.Cos(theta)                      // in Newtons
-	gravityBackwardsForce := vehicle.Specs.Mass * g * math.Sin(theta)                      // in Newtons
-	rollingResistanceForce := gravityDownwardsForce * vehicle.Specs.RollingResistanceRatio // in Newtons
-
-	aerodynamicDragForce := 0.5 * vehicle.Specs.DragRatio * vehicle.State.Physics.Velocity.MagSq() * vehicle.Specs.FrontalArea // in Newtons
-
-	var totalForce float64                    // in Newtons
-	if rollingResistanceForce > wheelsForce { // rolling resistance is bigger than tires force; the vehicle is not moving
-		// TODO: this will be wrong when ground slope is != 0, as the gravityBackwardsForce might pull the car backwards, resulting in a non null force
-		// For now, ground slope is null; plus, the car use it's parking brake when stopped !
-		totalForce = 0 // in Newtons
-	} else {
-		totalForce = wheelsForce - (rollingResistanceForce + gravityBackwardsForce + aerodynamicDragForce) // in Newtons
-	}
-
-	wheelTheoricExertedAcceleration := totalForce / vehicle.Specs.Mass // in m/s2 (a = Force / m); not drag bound
+	//brakingAcceleration := unit.Acceleration(number.Map(vehicle.State.Controls.Brake, 0, 1, 0, vehicle.Specs.MaxBrakingAcceleration)) // in m/s2
+	//engineBrakingTorque := vehicle.Specs.EngineBrakingRatio * (engineRPM / 60) * (1 - vehicle.State.Controls.Throttle) // in N•m
 
 	wheelAngularVelocity := unit.AngularVelocity(2.0 * math.Pi * engineRPM / (60.0 * transmissionRatio)) // in rad/s
 	wheelVelocity := wheelAngularVelocity * vehicle.Specs.WheelRadius                                    // in m/s, without drag limitiation
 
 	// Determining vehicle linear velocity depending on wheelLinearVelocity and aerodynamic drag
-
 	_, rpmCurveSlope, rpmCurveBase := vehicle.Specs.TorqueFunc(engineRPM) // in N•m
 
 	// Implementing equation 8.21
@@ -195,47 +158,26 @@ func compute(vehicle *types.Vehicle, dt float64) {
 
 	// TODO: engine braking, braking, cornering, weight distribution, wheel traction
 
-	flags := uint(0)
-	w := tabwriter.NewWriter(os.Stderr, 0, 4, 1, ' ', flags)
+	flags := tabwriter.AlignRight | tabwriter.DiscardEmptyColumns
+	w := tabwriter.NewWriter(os.Stderr, 8, 8, 0, ' ', flags)
 
-	if false {
-		fmt.Fprintln(w, "throttle\t", number.ToFixed(vehicle.State.Controls.Throttle, 5), "\t")
-		fmt.Fprintln(w, "steering\t", number.ToFixed(vehicle.State.Controls.Steering, 5), "\t")
-		fmt.Fprintln(w, "brake\t", number.ToFixed(vehicle.State.Controls.Brake, 5), "\t")
-		fmt.Fprintln(w, "transmissionRatio\t", number.ToFixed(transmissionRatio, 5), "\t")
-		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "engineTorque\t", number.ToFixed(engineTorque, 5), "\tN•m")
-		fmt.Fprintln(w, "engineBrakingTorque\t", number.ToFixed(engineBrakingTorque, 5), "\tN•m")
-		fmt.Fprintln(w, "netEngineTorque\t", number.ToFixed(netEngineTorque, 5), "\tN•m")
-		fmt.Fprintln(w, "wheelsTorque\t", number.ToFixed(wheelsTorque, 5), "\tN•m")
-		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "wheelsForce\t", number.ToFixed(wheelsForce, 5), "\tN")
-		fmt.Fprintln(w, "gravityDownwardsForce\t", number.ToFixed(gravityDownwardsForce, 5), "\tN")
-		fmt.Fprintln(w, "gravityBackwardsForce\t", number.ToFixed(gravityBackwardsForce, 5), "\tN")
-		fmt.Fprintln(w, "rollingResistanceForce\t", number.ToFixed(rollingResistanceForce, 5), "\tN")
-		fmt.Fprintln(w, "aerodynamicDragForce\t", number.ToFixed(aerodynamicDragForce, 5), "\tN")
-		fmt.Fprintln(w, "totalForce\t", number.ToFixed(totalForce, 5), "\tN")
-		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, 5), "\trad/s")
-		fmt.Fprintln(w, "wheelVelocity\t", number.ToFixed(wheelVelocity, 5), "\tm/s")
-		fmt.Fprintln(w, "wheelVelocity\t", number.ToFixed(wheelVelocity*3.6, 5), "\tKm/h")
-		fmt.Fprintln(w, "brakingAcceleration\t", number.ToFixed(brakingAcceleration, 5), "\tm/s2")
-		fmt.Fprintln(w, "wheelTheoricAcceleration\t", number.ToFixed(wheelTheoricExertedAcceleration, 5), "\tm/s2", "\t(not drag bound)")
-	}
+	displayPrecision := 2
 
-	fmt.Fprintln(w, "gear\t", vehicle.State.Controls.Gear, "\t")
-	fmt.Fprintln(w, "WheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, 5), "\trad/s")
-	fmt.Fprintln(w, "WheelAngularVelocity\t", number.ToFixed((wheelAngularVelocity/(math.Pi*2))*60, 5), "\tRPM")
-	fmt.Fprintln(w, "engineRPM\t", number.ToFixed(engineRPM, 5), "\tRPM")
-	fmt.Fprintln(w, "vehicleAcceleration\t", vehicleAcceleration, "\tm/s2", "\t(drag bound)")
-	fmt.Fprintln(w, "vehicleVelocity\t", vehicleVelocityPrime.Mag(), "\tm/s", "\t(force)")
-	fmt.Fprintln(w, "vehicleVelocity\t", vehicleVelocityPrime.Mag()*3.6, "\tKm/h", "\t(force)")
-	fmt.Fprintln(w, "vehicleMaxVelocity\t", vmax, "\tm/s", "\t(drag bound; in current gear, at current RPM)")
-	fmt.Fprintln(w, "vehicleMaxVelocity\t", vmax*3.6, "\tKm/h", "\t(drag bound; in current gear, at current RPM)")
-	//fmt.Fprintln(w, "vehiclePosition\t", vehiclePosition, "\t", "\t")
+	fmt.Fprintln(w, "throttle\t", number.ToFixed(vehicle.State.Controls.Throttle, displayPrecision), "\t\t")
+	fmt.Fprintln(w, "steering\t", number.ToFixed(vehicle.State.Controls.Steering, displayPrecision), "\t\t")
+	fmt.Fprintln(w, "brake\t", number.ToFixed(vehicle.State.Controls.Brake, displayPrecision), "\t\t")
+	fmt.Fprintln(w, "gear\t", vehicle.State.Controls.Gear, "\t\t")
+	fmt.Fprintln(w, "transmissionRatio\t", number.ToFixed(transmissionRatio, displayPrecision), "\t\t")
+	fmt.Fprintln(w, "engineRPM\t", number.ToFixed(engineRPM, displayPrecision), "\tRPM\t")
+	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, displayPrecision), "\trad/s\t")
+	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed((wheelAngularVelocity/(math.Pi*2))*60, displayPrecision), "\tRPM\t")
+	fmt.Fprintln(w, "vehicleAcceleration\t", number.ToFixed(vehicleAcceleration, displayPrecision), "\tm/s2\t")
+	fmt.Fprintln(w, "vehicleVelocity\t", number.ToFixed(vehicleVelocityPrime.Mag(), displayPrecision), "\tm/s", "\t"+strconv.FormatFloat(number.ToFixed(vehicleVelocityPrime.Mag()*3.6, displayPrecision), 'f', -1, 32), "\tKm/h")
+	fmt.Fprintln(w, "vehicleMaxVelocity\t", number.ToFixed(vmax, displayPrecision), "\tm/s", "\t"+strconv.FormatFloat(number.ToFixed(vmax*3.6, displayPrecision), 'f', -1, 32), "\tKm/h", "\t(current gear)")
+	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, displayPrecision), "\trad/s\t\t")
 	w.Flush()
 
-	log.Println("===========================================")
+	fmt.Println("===========================================")
 
 	vehicle.State.Physics.Position = vehiclePositionPrime
 	vehicle.State.Physics.Velocity = vehicleVelocityPrime
