@@ -24,6 +24,7 @@ type VehicleSpecs struct {
 	EngineBrakingRatio          unit.Ratio        // Braking force coefficient exerted by the frictions in the engine
 	TransmissionEfficiencyRatio unit.Ratio        // Ratio of efficiency of the transmission (1 = perfect transmission)
 	MaxBrakingAcceleration      unit.Acceleration // Maximum braking acceleration (deceleration in fact) exerted by the vehicle brakes, expressed in m/s2
+	MaxTireAccelerationOnG      unit.Acceleration // Maximum Tire acceleration (muK)
 
 	WheelBase                         unit.Metre // Distance between front axle and rear axle
 	CGFrontAxleWheelBaseDistanceRatio unit.Ratio // Ratio of Distance between the center of gravity and the front axle (relative to WheelBase)

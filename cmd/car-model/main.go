@@ -37,14 +37,15 @@ func main() {
 			DragRatio:              0.31,
 			FrontalArea:            1.94,
 			RollingResistanceRatio: 0.015,
-			Mass:               1393.0,
-			WheelRadius:        0.3186,
-			Cbraking:           10,
-			MinRPM:             1000,
-			MaxRPM:             7200,
-			Gears:              make(map[string]types.Gear, 0),
-			FinalDriveRatio:    3.44,
-			EngineBrakingRatio: 0.74,
+			Mass:                   1393.0,
+			WheelRadius:            0.3186,
+			Cbraking:               10,
+			MinRPM:                 1000,
+			MaxRPM:                 7200,
+			Gears:                  make(map[string]types.Gear, 0),
+			FinalDriveRatio:        3.44,
+			EngineBrakingRatio:     0.74,
+			MaxTireAccelerationOnG: 0.91, // maximum g force that the tire can exert on the ground (dry pavement)
 			TorqueFunc: func(rpm unit.RPM) (torque unit.Torque, curveSlope float64 /* b */, base float64 /* d */) {
 
 				b := 0.0
@@ -114,8 +115,16 @@ const theta = 0 // PI/2 = horizontal ground: Angle of the slope in the direction
 
 func compute(vehicle *types.Vehicle, dt float64) {
 
+	// Calculer au cours de l'itération n les valeurs utilisées lors de l'itération n+1
+	// Articuler en 2 parties:
+	//
+	// 1. Calculs
+	// 2. Mise à jour de l'état du véhicule (plus de calculs)
+
 	currentGearRatio := vehicle.Specs.Gears[vehicle.State.Controls.Gear].Ratio
 	transmissionRatio := currentGearRatio * vehicle.Specs.FinalDriveRatio
+
+	//maximumTractionForce := vehicle.Specs.MaxTireAccelerationOnG * ve
 
 	engineRPM := vehicle.State.Physics.RPM
 
@@ -125,8 +134,10 @@ func compute(vehicle *types.Vehicle, dt float64) {
 	wheelAngularVelocity := unit.AngularVelocity(2.0 * math.Pi * engineRPM / (60.0 * transmissionRatio)) // in rad/s
 	wheelVelocity := wheelAngularVelocity * vehicle.Specs.WheelRadius                                    // in m/s, without drag limitiation
 
-	// Determining vehicle linear velocity depending on wheelLinearVelocity and aerodynamic drag
+	// Determining vehicle acceleration depending on wheelVelocity and aerodynamic drag
 	_, rpmCurveSlope, rpmCurveBase := vehicle.Specs.TorqueFunc(engineRPM) // in N•m
+	rpmCurveSlope *= vehicle.State.Controls.Throttle
+	rpmCurveBase *= vehicle.State.Controls.Throttle
 
 	// Implementing equation 8.21
 
@@ -158,6 +169,20 @@ func compute(vehicle *types.Vehicle, dt float64) {
 
 	// TODO: engine braking, braking, cornering, weight distribution, wheel traction
 
+	// Determine wheel maximum acceleration
+
+	// Slip angles
+
+	//	Vlat := vector.MakeVector2(0, 0)
+	//	Vlong := vector.MakeVector2(0, 0)
+
+	// Magnitude à appliquer orthogonalement
+	// TODO: slip force
+	// radius := 1.0 // à déterminer
+	// speed := vehicleVelocityPrime.Mag()
+	// Flat := (vehicle.Specs.Mass * math.Pow(speed, 2)) / radius
+	// Flat -= vehicle.Specs.MaxTireAcceleration
+
 	flags := tabwriter.AlignRight | tabwriter.DiscardEmptyColumns
 	w := tabwriter.NewWriter(os.Stderr, 8, 8, 0, ' ', flags)
 
@@ -172,6 +197,7 @@ func compute(vehicle *types.Vehicle, dt float64) {
 	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, displayPrecision), "\trad/s\t")
 	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed((wheelAngularVelocity/(math.Pi*2))*60, displayPrecision), "\tRPM\t")
 	fmt.Fprintln(w, "vehicleAcceleration\t", number.ToFixed(vehicleAcceleration, displayPrecision), "\tm/s2\t")
+	fmt.Fprintln(w, "wheelVelocity\t", number.ToFixed(wheelVelocity, displayPrecision), "\t")
 	fmt.Fprintln(w, "vehicleVelocity\t", number.ToFixed(vehicleVelocityPrime.Mag(), displayPrecision), "\tm/s", "\t"+strconv.FormatFloat(number.ToFixed(vehicleVelocityPrime.Mag()*3.6, displayPrecision), 'f', -1, 32), "\tKm/h")
 	fmt.Fprintln(w, "vehicleMaxVelocity\t", number.ToFixed(vmax, displayPrecision), "\tm/s", "\t"+strconv.FormatFloat(number.ToFixed(vmax*3.6, displayPrecision), 'f', -1, 32), "\tKm/h", "\t(current gear)")
 	fmt.Fprintln(w, "wheelAngularVelocity\t", number.ToFixed(wheelAngularVelocity, displayPrecision), "\trad/s\t\t")
