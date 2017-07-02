@@ -10,8 +10,8 @@ import (
 
 	"github.com/bytearena/bytearena/common/utils/number"
 	"github.com/bytearena/bytearena/common/utils/vector"
-	"github.com/netgusto/skeleton-car/common/types"
-	"github.com/netgusto/skeleton-car/common/unit"
+	"github.com/bytearena/car-model-prototype/common/types"
+	"github.com/bytearena/car-model-prototype/common/unit"
 )
 
 func main() {

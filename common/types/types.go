@@ -1,6 +1,6 @@
 package types
 
-import "github.com/netgusto/skeleton-car/common/unit"
+import "github.com/bytearena/car-model-prototype/common/unit"
 
 type Gear struct {
 	Name  string
